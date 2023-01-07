@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -12,56 +13,67 @@ import (
 
 // TODO: hard code.
 func oauth2Services(api *APIServer) gin.HandlerFunc {
-	type imageAndURL struct {
-		Image string `json:"image"`
-		URL   string `json:"url"`
-	}
 	type service struct {
-		Name    oauth.Service `json:"name"`
-		Web     imageAndURL   `json:"web"`
-		Android imageAndURL   `json:"android"`
+		Name  oauth.Service `json:"name"`
+		Image string        `json:"image"`
+		URL   string        `json:"url"`
 	}
-	type response struct {
-		Services []service `json:"services"`
+	type response []service
+	host := "http://localhost" + api.addr
+	if api.runMode == "prod" {
+		host = filepath.Join("https://", api.config.Server.Token.Cookie.Domain)
 	}
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, &response{
-			Services: []service{
+		platform, err := oauth.ParsePlatform(c.Param("platform"))
+		if err != nil {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		var (
+			googleLogo = filepath.Join(host, "assets/images/logos/google.svg")
+			yandexLogo = filepath.Join(host, "assets/images/logos/yandex.svg")
+			vkLogo     = filepath.Join(host, "assets/images/logos/vk.svg")
+		)
+		switch platform {
+		case oauth.Web:
+			c.JSON(http.StatusOK, &response{
 				{
-					Name: oauth.Google,
-					Web: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.Google.Callbacks.Web, "/callback"),
-					},
-					Android: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.Google.Callbacks.Android, "/callback"),
-					},
+					Name:  oauth.Google,
+					Image: googleLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Google.Callbacks.Web, "/callback"),
 				},
 				{
-					Name: oauth.Yandex,
-					Web: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Web, "/callback"),
-					},
-					Android: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Android, "/callback"),
-					},
+					Name:  oauth.Yandex,
+					Image: yandexLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Web, "/callback"),
 				},
 				{
-					Name: oauth.VK,
-					Web: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.VK.Callbacks.Web, "/callback"),
-					},
-					Android: imageAndURL{
-						Image: "",
-						URL:   strings.TrimSuffix(api.config.Oauth2.VK.Callbacks.Android, "/callback"),
-					},
+					Name:  oauth.VK,
+					Image: vkLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Android, "/callback"),
 				},
-			},
-		})
+			})
+		case oauth.Android:
+			c.JSON(http.StatusOK, &response{
+				{
+					Name:  oauth.Google,
+					Image: googleLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Google.Callbacks.Android, "/callback"),
+				},
+				{
+					Name:  oauth.Yandex,
+					Image: yandexLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Android, "/callback"),
+				},
+				{
+					Name:  oauth.VK,
+					Image: vkLogo,
+					URL:   strings.TrimSuffix(api.config.Oauth2.Yandex.Callbacks.Android, "/callback"),
+				},
+			})
+		default:
+			c.AbortWithStatus(http.StatusNotFound)
+		}
 	}
 }
 

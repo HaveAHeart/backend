@@ -17,6 +17,9 @@ import (
 
 // APIServer is the main object of programm.
 type APIServer struct {
+	runMode string
+	addr    string
+
 	router         *gin.Engine
 	logger         *zerolog.Logger
 	config         *config.Config
@@ -33,17 +36,16 @@ func redirectToTls(w http.ResponseWriter, r *http.Request) {
 }
 
 // Run runs the HTTP server.
-func (a *APIServer) Run(port, runMode string) error {
-	if runMode == "prod" {
+func (a *APIServer) Run() error {
+	if a.runMode == "prod" {
 		go func() {
 			if err := http.ListenAndServe(":80", http.HandlerFunc(redirectToTls)); err != nil {
 				a.logger.Fatal().Err(err).Send()
 			}
 		}()
-
-		return a.router.RunTLS(":443", "./cert.crt", "./private.key")
+		return a.router.RunTLS(a.addr, "./cert.crt", "./private.key")
 	} else {
-		return a.router.Run(port)
+		return a.router.Run(a.addr)
 	}
 }
 
@@ -51,14 +53,14 @@ func (a *APIServer) Run(port, runMode string) error {
 var singleton *APIServer
 
 // NewAPIServer creates a singleton APIServer object.
-func NewAPIServer(db Database, router *gin.Engine, logger *zerolog.Logger, configReader ConfigReader) *APIServer {
+func NewAPIServer(runMode string, db Database, router *gin.Engine, logger *zerolog.Logger, configReader ConfigReader) *APIServer {
 	if singleton == nil {
-		singleton = initApi(db, router, logger, configReader)
+		singleton = initApi(runMode, db, router, logger, configReader)
 	}
 	return singleton
 }
 
-func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configReader ConfigReader) *APIServer {
+func initApi(runMode string, db Database, router *gin.Engine, logger *zerolog.Logger, configReader ConfigReader) *APIServer {
 	// Read config from database.
 	logger.Info().Msg("Reading config from configReader.")
 	config, err := configReader.ReadConfig()
@@ -73,6 +75,8 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 	}
 
 	a := &APIServer{
+		runMode:      runMode,
+		addr:         ":8008",
 		router:       router,
 		logger:       logger,
 		config:       config,
@@ -81,9 +85,17 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 		ConfigReader: configReader,
 	}
 
+	if a.runMode == "prod" {
+		a.addr = ":443"
+	}
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowWebSockets = true
+
 	a.router.Use(
 		sameSiteMiddleware(a),
-		cors.Default(),
+		cors.New(corsConfig),
 		loggerMiddleware(a),
 	)
 
@@ -98,13 +110,13 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 		<b>Вы не авторизованы!</b><br><br>
 
 		<a href="/api/v1/oauth2/web/google" style="outline: none;text-decoration: none;">
-			<img src="https://cdn.iconscout.com/icon/free/png-256/google-1772223-1507807.png" width="30px" style="margin:10px;">
+			<img src="assets/images/logos/google.svg" width="30px" style="margin:10px;">
 		</a>
 		<a href="/api/v1/oauth2/web/yandex" style="outline: none;text-decoration: none;">
-			<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Yandex_icon.svg/2048px-Yandex_icon.svg.png" width="30px" style="margin:10px;">
+			<img src="assets/images/logos/yandex.svg" width="30px" style="margin:10px;">
 		</a>
 		<a href="/api/v1/oauth2/web/vk" style="outline: none;text-decoration: none;">
-			<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/VK_Compact_Logo_%282021-present%29.svg/2048px-VK_Compact_Logo_%282021-present%29.svg.png" width="30px" style="margin:10px;">
+			<img src="assets/images/logos/vk.svg" width="30px" style="margin:10px;">
 		</a>
 	{{ end }}
 
@@ -118,6 +130,9 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 		<a href="/logout">Логаут</a>
 	{{ end }}
 	`)))
+
+	// Static assets directory.
+	a.router.Static("/assets", "./assets")
 
 	// Main page.
 	a.router.GET("/", func(c *gin.Context) {
@@ -167,7 +182,7 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 		apiRoutes.POST("/sign_up", signUp(a))
 		apiRoutes.POST("/sign_in", signIn(a))
 		apiRoutes.GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "PONG") })
-		apiRoutes.GET("/oauth2/services", oauth2Services(a))
+		apiRoutes.GET("/oauth2/:platform/services", oauth2Services(a))
 		apiRoutes.GET("/oauth2/:platform/:service", oauth2Login(a))
 		apiRoutes.GET("/oauth2/:platform/:service/callback", oauth2Callback(a))
 	}
@@ -181,6 +196,12 @@ func initApi(db Database, router *gin.Engine, logger *zerolog.Logger, configRead
 			Header:       config.Server.Token.Header.Name,
 			Cookie:       config.Server.Token.Cookie.Name,
 			HeaderPrefix: "Bearer",
+		},
+		WebsocketConfig: centrifuge.WebsocketConfig{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+			UseWriteBufferPool: true,
 		},
 	})
 	if err != nil {

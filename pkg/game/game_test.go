@@ -3,6 +3,7 @@ package game
 import (
 	"testing"
 
+	"github.com/renju24/backend/internal/pkg/apierror"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,7 @@ func TestGame(t *testing.T) {
 				NewMove(1, 5, White),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrFirstMoveShouldBeBlack,
+			expectedError:  apierror.ErrFirstMoveShouldBeBlack,
 		},
 		// Case when first move is not in center.
 		{
@@ -26,7 +27,7 @@ func TestGame(t *testing.T) {
 				NewMove(1, 2, Black),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrFirstMoveShouldBeInCenter,
+			expectedError:  apierror.ErrFirstMoveShouldBeInCenter,
 		},
 		// Case when the X-coordinate is outside the board.
 		{
@@ -35,7 +36,7 @@ func TestGame(t *testing.T) {
 				NewMove(-1, 5, White),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrCoordinatesOutside,
+			expectedError:  apierror.ErrCoordinatesOutside,
 		},
 		// Case when the Y-coordinate is outside the board.
 		{
@@ -44,7 +45,7 @@ func TestGame(t *testing.T) {
 				NewMove(5, 15, Black),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrCoordinatesOutside,
+			expectedError:  apierror.ErrCoordinatesOutside,
 		},
 		// Case when field is already taken.
 		{
@@ -53,7 +54,7 @@ func TestGame(t *testing.T) {
 				NewMove(7, 7, White),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrFieldAlreadyTaken,
+			expectedError:  apierror.ErrFieldAlreadyTaken,
 		},
 		// Case when the last move was made by same player.
 		{
@@ -63,7 +64,7 @@ func TestGame(t *testing.T) {
 				NewMove(1, 0, White),
 			},
 			expectedWinner: Nil,
-			expectedError:  ErrInvalidTurn,
+			expectedError:  apierror.ErrInvalidTurn,
 		},
 		// Case when black should win.
 		{

@@ -37,3 +37,45 @@ type EventGameInvitation struct {
 func (e *EventGameInvitation) EventType() string {
 	return "game_invitation"
 }
+
+type EventDeclineGameInvitation struct{}
+
+func (e *EventDeclineGameInvitation) EventType() string {
+	return "decline_game_invitation"
+}
+
+type EventGameStarted struct{}
+
+func (e *EventGameStarted) EventType() string {
+	return "game_started"
+}
+
+type EventGameInvitationExpired struct{}
+
+func (e *EventGameInvitationExpired) EventType() string {
+	return "game_invitation_expired"
+}
+
+type EventMove struct {
+	UserID      int64 `json:"user_id"`
+	XCoordinate int   `json:"x_coordinate"`
+	YCoordinate int   `json:"y_coordinate"`
+}
+
+func (e *EventMove) EventType() string {
+	return "move"
+}
+
+type EventGameEndedWithWinner struct {
+	WinnerID int64 `json:"winner_id"`
+}
+
+func (e *EventGameEndedWithWinner) EventType() string {
+	return "game_ended_with_winner"
+}
+
+type EventGameEndedInDraw struct{}
+
+func (e *EventGameEndedInDraw) EventType() string {
+	return "game_ended_in_draw"
+}

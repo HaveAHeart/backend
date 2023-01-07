@@ -135,20 +135,14 @@ func (db *Database) GetUserByID(userID int64) (*model.User, error) {
 	return &user, err
 }
 
-func (db *Database) CreateGame(blackUserID, whiteUserID int64) (*model.Game, error) {
-	now := time.Now()
-	game := model.Game{
-		BlackUserID: blackUserID,
-		WhiteUserID: whiteUserID,
-		StartedAt:   now,
-	}
-	query := `INSERT INTO games (black_user_id, white_user_id, started_at) VALUES ($1, $2, $3) RETURNING id;`
+func (db *Database) CreateGame(blackUserID, whiteUserID int64) (gameID int64, err error) {
+	query := `INSERT INTO games (black_user_id, white_user_id, status) VALUES ($1, $2, $3) RETURNING id;`
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	defer cancel()
-	if err := db.pool.QueryRow(ctx, query, blackUserID, whiteUserID, now).Scan(&game.ID); err != nil {
-		return nil, err
+	if err := db.pool.QueryRow(ctx, query, blackUserID, whiteUserID, model.WaitingOpponent).Scan(&gameID); err != nil {
+		return 0, err
 	}
-	return &game, nil
+	return gameID, nil
 }
 
 func (db *Database) IsGameMember(userID, gameID int64) (bool, error) {
@@ -157,6 +151,9 @@ func (db *Database) IsGameMember(userID, gameID int64) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	defer cancel()
 	if err := db.pool.QueryRow(ctx, query, gameID, userID, userID).Scan(&ok); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
 		return false, err
 	}
 	return ok, nil
@@ -235,4 +232,100 @@ func (db *Database) Top10() ([]*model.User, error) {
 		users = append(users, &user)
 	}
 	return users, err
+}
+
+func (db *Database) IsPlaying(userID int64) (bool, error) {
+	var ok bool
+	query := `SELECT TRUE FROM games WHERE (black_user_id = $1 OR white_user_id = $1) AND status = $2`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	if err := db.pool.QueryRow(ctx, query, userID, model.InProgress).Scan(&ok); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return ok, nil
+}
+
+func (db *Database) DeclineGameInvitation(userID int64, gameID int64) error {
+	query := `DELETE FROM games WHERE (black_user_id = $1 OR white_user_id = $1) AND id = $2`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	_, err := db.pool.Exec(ctx, query, userID, gameID)
+	return err
+}
+
+func (db *Database) StartGame(gameID int64) error {
+	query := `UPDATE games SET status = $1, started_at = NOW() WHERE id = $2`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	_, err := db.pool.Exec(ctx, query, model.InProgress, gameID)
+	return err
+}
+
+func (db *Database) GetGameByID(gameID int64) (*model.Game, error) {
+	query := `
+		SELECT
+			id,
+			black_game_id,
+			white_game_id,
+			winner_id,
+			status,
+			started_at,
+			finished_at
+		FROM
+			games
+		WHERE id = $1`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	var game model.Game
+	err := db.pool.QueryRow(ctx, query, gameID).Scan(
+		&game.ID,
+		&game.BlackUserID,
+		&game.WhiteUserID,
+		&game.Winner,
+		&game.Status,
+		&game.StartedAt,
+		&game.FinishedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apierror.ErrorGameNotFound
+	}
+	return &game, err
+}
+
+func (db *Database) GetGameMovesByID(gameID int64) ([]model.Move, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	rows, err := db.pool.Query(ctx, `SELECT game_id, user_id, x_coordinate, y_coordinate FROM moves WHERE game_id = $1`, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var moves []model.Move
+	for rows.Next() {
+		var move model.Move
+		if err = rows.Scan(&move.GameID, &move.UserID, &move.YCoordinate, &move.YCoordinate); err != nil {
+			return nil, err
+		}
+		moves = append(moves, move)
+	}
+	return moves, err
+}
+
+func (db *Database) CreateMove(gameID, userID int64, x, y int) error {
+	query := `INSERT INTO moves (game_id, user_id, x_coordinate, y_coordinate) VALUES ($1, $2, $3, $4);`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	_, err := db.pool.Exec(ctx, query, gameID, userID, x, y)
+	return err
+}
+
+func (db *Database) FinishGameWithWinner(gameID, winnerID int64) error {
+	query := `UPDATE games SET status = $1, winner_id = $2, finished_at = NOW() WHERE id = $3`
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	defer cancel()
+	_, err := db.pool.Exec(ctx, query, model.Finished, winnerID, gameID)
+	return err
 }

@@ -1,8 +1,6 @@
 package game
 
-import (
-	"errors"
-)
+import "github.com/renju24/backend/internal/pkg/apierror"
 
 const BoardSize = 15
 
@@ -39,35 +37,27 @@ func NewGame() *Game {
 	return &Game{}
 }
 
-var (
-	ErrFirstMoveShouldBeBlack    = errors.New("first move should be made by black user")
-	ErrFirstMoveShouldBeInCenter = errors.New("first move should be in board's center")
-	ErrCoordinatesOutside        = errors.New("coordinates outside the board")
-	ErrFieldAlreadyTaken         = errors.New("field is already taken")
-	ErrInvalidTurn               = errors.New("invalid turn")
-)
-
 func (g *Game) ApplyMove(move Move) (winner Color, err error) {
 	// If it's the first move, then user should be black and move should be in board's center.
 	if g.lastMove.color == Nil {
 		if move.color != Black {
-			return Nil, ErrFirstMoveShouldBeBlack
+			return Nil, apierror.ErrFirstMoveShouldBeBlack
 		}
 		if move.x != 7 || move.y != 7 {
-			return Nil, ErrFirstMoveShouldBeInCenter
+			return Nil, apierror.ErrFirstMoveShouldBeInCenter
 		}
 	}
 	// Check the coordinates are not outside the board.
 	if move.x >= BoardSize || move.x < 0 || move.y >= BoardSize || move.y < 0 {
-		return Nil, ErrCoordinatesOutside
+		return Nil, apierror.ErrCoordinatesOutside
 	}
 	// Check the field is not already taken.
 	if g.board[move.x*BoardSize+move.y] != Nil {
-		return Nil, ErrFieldAlreadyTaken
+		return Nil, apierror.ErrFieldAlreadyTaken
 	}
 	// Check the last move was made by another player.
 	if g.lastMove.color == move.color {
-		return Nil, ErrInvalidTurn
+		return Nil, apierror.ErrInvalidTurn
 	}
 
 	// Apply the move and change the board.

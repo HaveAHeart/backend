@@ -64,11 +64,11 @@ func main() {
 	defer db.Close()
 
 	// Init server.
-	server := apiserver.NewAPIServer(db, gin.New(), &logger, db)
+	server := apiserver.NewAPIServer(runMode, db, gin.New(), &logger, db)
 
-	logger.Info().Str("port", port).Msg("Running api server")
+	logger.Info().Msg("Running api server")
 
-	if err := server.Run(port, runMode); err != nil {
+	if err := server.Run(); err != nil {
 		logger.Fatal().Err(err).Send()
 	}
 }

@@ -71,4 +71,13 @@ var (
 	ErrorUserNotFound               = &centrifuge.Error{416, "user not found", false}
 	ErrorCallingYourselfForGame     = &centrifuge.Error{417, "can't call yourself for a game", false}
 	ErrorInvalidUsernameCharacter   = &centrifuge.Error{418, "invalid username character", false}
+	ErrorInviterAlreadyPlaying      = &centrifuge.Error{419, "inviter already playing a game", false}
+	ErrorOpponentAlreadyPlaying     = &centrifuge.Error{420, "opponent already playing a game", false}
+	ErrorGameNotFound               = &centrifuge.Error{421, "game not found", false}
+	ErrorGameIsNotActive            = &centrifuge.Error{422, "game is not active", false}
+	ErrFirstMoveShouldBeBlack       = &centrifuge.Error{423, "first move should be made by black user", false}
+	ErrFirstMoveShouldBeInCenter    = &centrifuge.Error{424, "first move should be in board's center", false}
+	ErrCoordinatesOutside           = &centrifuge.Error{425, "coordinates outside the board", false}
+	ErrFieldAlreadyTaken            = &centrifuge.Error{426, "field is already taken", false}
+	ErrInvalidTurn                  = &centrifuge.Error{427, "invalid turn", false}
 )
